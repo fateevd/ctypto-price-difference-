@@ -53,9 +53,11 @@ func getData(url string) (float64, error) {
 }
 
 func main() {
-	records := readCsvFile("text.csv")
+	records := readCsvFile("values.csv")
 	allPrice := 0.0
 	m := map[string]float64{}
+	startBank := 0.0
+
 	var wg sync.WaitGroup
 	for _, t := range records {
 
@@ -69,8 +71,10 @@ func main() {
 		timestamp := parsedTime.Unix() * 1000
 		history := baseUrl + getQueryParams(currency, timestamp)
 		nowPriceUrl := baseUrl + getQueryParams(currency, (time.Now().Unix()-1000)*1000)
+
 		go func() {
 			oldPrice, _ := getData(history)
+			startBank = round(startBank + convertCurrency(amount, oldPrice))
 			nowPrice, _ := getData(nowPriceUrl)
 			defer wg.Done()
 			finalPrice := convertCurrency(amount, nowPrice) - convertCurrency(amount, oldPrice)
@@ -79,8 +83,11 @@ func main() {
 		}()
 	}
 	wg.Wait()
-	fmt.Println(round(allPrice))
-	fmt.Println(m)
+	fmt.Println("start bank:", startBank, "\nnow bank:", round(startBank+allPrice), "\nprofit:", round(allPrice))
+	fmt.Println("Your coins:")
+	for c, v := range m {
+		fmt.Println(c, round(v))
+	}
 }
 
 func getQueryParams(currency string, timestamp int64) string {
