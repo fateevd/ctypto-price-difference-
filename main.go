@@ -47,7 +47,6 @@ func getData(url string) (float64, error) {
 		fmt.Println("Ошибка при разборе JSON:", err)
 		return 0, err
 	}
-	//fmt.Println(resp.Status)
 	price, _ := strconv.ParseFloat(data[0][1].(string), 64)
 	return price, err
 }
@@ -59,11 +58,13 @@ func main() {
 	startBank := 0.0
 
 	var wg sync.WaitGroup
-	for _, t := range records {
+	for _, str := range records {
+		t := strings.Split(str[0], ";")
 
-		date, currency := strings.Trim(t[0], " "), strings.Trim(t[2], " ")
+		date, currency := t[0], t[2]
 		amount, _ := strconv.ParseFloat(t[1], 64)
 		parsedTime, err := time.Parse(time.RFC3339, date)
+
 		if err != nil {
 			parsedTime = time.Now()
 		}
