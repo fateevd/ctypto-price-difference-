@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +22,7 @@ const (
 	interval     = "1m"
 	pairCurrency = "USDT"
 	limit        = "1"
-	nowUrl       = "https://api.binance.com/api/v3/ticker/price"
+	nowUrl       = "https://api.binance.com/api/v3/ticker/price?"
 )
 
 func convertCurrency(amount float64, exchangeRate float64) float64 {
@@ -74,8 +75,17 @@ func main() {
 		}
 		wg.Add(1)
 		timestamp := parsedTime.Unix() * 1000
-		history := baseUrl + getQueryParams(currency, timestamp)
-		nowPriceUrl := nowUrl + "?symbol=" + currency + pairCurrency
+
+		history := createLinkWithQueryParams(baseUrl, TypeArgsForCreateLink{
+			symbol:    currency + pairCurrency,
+			limit:     limit,
+			interval:  interval,
+			startTime: strconv.FormatInt(timestamp, 10),
+		})
+
+		nowPriceUrl := createLinkWithQueryParams(nowUrl, TypeArgsForCreateLink{
+			symbol: currency + pairCurrency,
+		})
 
 		go func() {
 			oldPrice, err := getData(history)
@@ -103,14 +113,26 @@ func main() {
 	}
 }
 
-func getQueryParams(currency string, timestamp int64) string {
-	startTime := strconv.FormatInt(timestamp, 10)
+type TypeArgsForCreateLink struct {
+	symbol    string
+	interval  string
+	startTime string
+	limit     string
+}
+
+func createLinkWithQueryParams(link string, args TypeArgsForCreateLink) string {
+	val := reflect.ValueOf(args)
+	typ := reflect.TypeOf(args)
 	queryParams := url.Values{}
-	queryParams.Set("symbol", currency+pairCurrency)
-	queryParams.Set("interval", interval)
-	queryParams.Set("startTime", startTime)
-	queryParams.Set("limit", limit)
-	return queryParams.Encode()
+	for i := 0; i < val.NumField(); i++ {
+		fieldName := typ.Field(i).Name
+		fieldValue := val.Field(i).String()
+		if fieldValue == "" {
+			continue
+		}
+		queryParams.Set(fieldName, fieldValue)
+	}
+	return link + queryParams.Encode()
 }
 
 func readCsvFile(filePath string) [][]string {
