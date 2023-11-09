@@ -21,6 +21,7 @@ const (
 	interval     = "1m"
 	pairCurrency = "USDT"
 	limit        = "1"
+	nowUrl       = "https://api.binance.com/api/v3/ticker/price"
 )
 
 func convertCurrency(amount float64, exchangeRate float64) float64 {
@@ -47,7 +48,10 @@ func getData(url string) (float64, error) {
 		fmt.Println("Ошибка при разборе JSON:", err)
 		return 0, err
 	}
-	price, _ := strconv.ParseFloat(data[0][1].(string), 64)
+	price, err := strconv.ParseFloat(data[0][1].(string), 64)
+	if err != nil {
+		fmt.Println(url)
+	}
 	return price, err
 }
 
@@ -71,12 +75,20 @@ func main() {
 		wg.Add(1)
 		timestamp := parsedTime.Unix() * 1000
 		history := baseUrl + getQueryParams(currency, timestamp)
-		nowPriceUrl := baseUrl + getQueryParams(currency, (time.Now().Unix()-1000)*1000)
+		nowPriceUrl := nowUrl + "?symbol=" + currency + pairCurrency
 
 		go func() {
-			oldPrice, _ := getData(history)
+			oldPrice, err := getData(history)
+			if err != nil {
+				fmt.Println(currency, timestamp)
+				return
+			}
 			startBank = round(startBank + convertCurrency(amount, oldPrice))
-			nowPrice, _ := getData(nowPriceUrl)
+			nowPrice, err := getNowPrice(nowPriceUrl)
+			if err != nil {
+				fmt.Println(currency, timestamp)
+				return
+			}
 			defer wg.Done()
 			finalPrice := convertCurrency(amount, nowPrice) - convertCurrency(amount, oldPrice)
 			allPrice += round(finalPrice)
@@ -115,4 +127,30 @@ func readCsvFile(filePath string) [][]string {
 	}
 
 	return records
+}
+
+type Data struct {
+	Symbol string `json:"symbol"`
+	Price  string `json:"price"`
+}
+
+func getNowPrice(url string) (float64, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println("Ошибка при выполнении GET-запроса:", err)
+		return 0, nil
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+
+	var data Data
+
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		fmt.Println("Ошибка при разборе JSON:", err)
+		return 0, err
+	}
+
+	price, err := strconv.ParseFloat(data.Price, 64)
+	return price, err
 }
