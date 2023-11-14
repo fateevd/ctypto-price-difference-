@@ -60,6 +60,7 @@ func main() {
 	records := readCsvFile("values.csv")
 	allPrice := 0.0
 	m := map[string]float64{}
+	cachePrice := map[string]float64{}
 	startBank := 0.0
 
 	var wg sync.WaitGroup
@@ -88,21 +89,29 @@ func main() {
 		})
 
 		go func() {
+			var globalNowPrice = 0.0
 			oldPrice, err := getData(history)
 			if err != nil {
 				fmt.Println(currency, timestamp)
 				return
 			}
 			startBank = round(startBank + convertCurrency(amount, oldPrice))
-			nowPrice, err := getNowPrice(nowPriceUrl)
-			if err != nil {
-				fmt.Println(currency, timestamp)
-				return
+			value, hasCacheNowPrice := cachePrice[currency]
+			if !hasCacheNowPrice {
+				nowPrice, err := getNowPrice(nowPriceUrl)
+				if err != nil {
+					fmt.Println(currency, timestamp)
+					return
+				}
+				cachePrice[currency] = nowPrice
+				globalNowPrice = nowPrice
+			} else {
+				globalNowPrice = value
 			}
-			defer wg.Done()
-			finalPrice := convertCurrency(amount, nowPrice) - convertCurrency(amount, oldPrice)
+			finalPrice := convertCurrency(amount, globalNowPrice) - convertCurrency(amount, oldPrice)
 			allPrice += round(finalPrice)
-			m[currency] = m[currency] + round(finalPrice)
+			m[currency] += round(finalPrice)
+			defer wg.Done()
 		}()
 	}
 	wg.Wait()
